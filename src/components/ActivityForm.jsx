@@ -1,53 +1,72 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { supabase } from '../supabaseClient';
+import * as Sentry from '@sentry/browser';
+import ActivityFormUI from './ActivityFormUI';
 
-const ActivityForm = ({ newActivity, setNewActivity, onAddActivity, clients }) => {
+const ActivityForm = ({ clients, onActivityAdded }) => {
+  const [newActivity, setNewActivity] = useState({ 
+    title: '', 
+    scheduledTime: '', 
+    client_id: '', 
+    notes: '',
+    whatsapp_message: '' 
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch('/api/activities', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          ...newActivity,
+          client_id: parseInt(newActivity.client_id),
+          scheduled_time: newActivity.scheduledTime
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to save activity');
+      
+      await response.json();
+      setNewActivity({ 
+        title: '', 
+        scheduledTime: '', 
+        client_id: '', 
+        notes: '',
+        whatsapp_message: '' 
+      });
+      onActivityAdded();
+    } catch (error) {
+      Sentry.captureException(error);
+      setError('Errore nel salvataggio dell\'attività');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleInputChange = (field, value) => {
+    setNewActivity(prev => ({ ...prev, [field]: value }));
+  };
+
   return (
-    <section className="bg-white p-6 rounded-lg shadow-sm">
-      <h2 className="text-lg font-semibold mb-4">Nuova Attività</h2>
-      <form onSubmit={onAddActivity} className="space-y-3">
-        <input
-          type="text"
-          placeholder="Titolo attività"
-          value={newActivity.title}
-          onChange={(e) => setNewActivity({ ...newActivity, title: e.target.value })}
-          className="w-full px-3 py-2 border rounded-md box-border"
-          required
-        />
-        <input
-          type="datetime-local"
-          value={newActivity.date}
-          onChange={(e) => setNewActivity({ ...newActivity, date: e.target.value })}
-          className="w-full px-3 py-2 border rounded-md box-border"
-          required
-        />
-        <select
-          value={newActivity.client}
-          onChange={(e) => setNewActivity({ ...newActivity, client: e.target.value })}
-          className="w-full px-3 py-2 border rounded-md box-border"
-          required
-        >
-          <option value="">Seleziona cliente</option>
-          {clients.map(client => (
-            <option key={client.id} value={client.id}>{client.name}</option>
-          ))}
-        </select>
-        <select
-          value={newActivity.type}
-          onChange={(e) => setNewActivity({ ...newActivity, type: e.target.value })}
-          className="w-full px-3 py-2 border rounded-md box-border"
-        >
-          <option value="meeting">Meeting</option>
-          <option value="call">Chiamata</option>
-          <option value="task">Task</option>
-        </select>
-        <button
-          type="submit"
-          className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition-colors cursor-pointer"
-        >
-          Aggiungi Attività
-        </button>
-      </form>
-    </section>
+    <ActivityFormUI
+      newActivity={newActivity}
+      isSubmitting={isSubmitting}
+      error={error}
+      clients={clients}
+      onSubmit={handleSubmit}
+      onInputChange={handleInputChange}
+    />
   );
 };
 

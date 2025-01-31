@@ -1,47 +1,52 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { supabase } from '../supabaseClient';
+import * as Sentry from '@sentry/browser';
+import ClientFormUI from './ClientFormUI';
+import { saveClient } from '../services/clientService';
 
-const ClientForm = ({ newClient, setNewClient, onAddClient }) => {
+const ClientForm = ({ onClientAdded }) => {
+  const [newClient, setNewClient] = useState({ 
+    name: '', 
+    phone: '', 
+    address: '', 
+    email: '' 
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      await saveClient(newClient, session?.access_token);
+      setNewClient({ name: '', phone: '', address: '', email: '' });
+      onClientAdded();
+    } catch (error) {
+      Sentry.captureException(error);
+      setError('Errore nel salvataggio del cliente');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleChange = (e) => {
+    setNewClient({
+      ...newClient,
+      [e.target.name]: e.target.value
+    });
+  };
+
   return (
-    <section className="bg-white p-6 rounded-lg shadow-sm">
-      <h2 className="text-lg font-semibold mb-4">Nuovo Cliente</h2>
-      <form onSubmit={onAddClient} className="space-y-3">
-        <input
-          type="text"
-          placeholder="Nome cliente"
-          value={newClient.name}
-          onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
-          className="w-full px-3 py-2 border rounded-md box-border"
-          required
-        />
-        <input
-          type="email"
-          placeholder="Email"
-          value={newClient.email}
-          onChange={(e) => setNewClient({ ...newClient, email: e.target.value })}
-          className="w-full px-3 py-2 border rounded-md box-border"
-        />
-        <input
-          type="tel"
-          placeholder="WhatsApp"
-          value={newClient.whatsapp}
-          onChange={(e) => setNewClient({ ...newClient, whatsapp: e.target.value })}
-          className="w-full px-3 py-2 border rounded-md box-border"
-        />
-        <input
-          type="text"
-          placeholder="Telegram (@username)"
-          value={newClient.telegram}
-          onChange={(e) => setNewClient({ ...newClient, telegram: e.target.value })}
-          className="w-full px-3 py-2 border rounded-md box-border"
-        />
-        <button
-          type="submit"
-          className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition-colors cursor-pointer"
-        >
-          Aggiungi Cliente
-        </button>
-      </form>
-    </section>
+    <ClientFormUI
+      newClient={newClient}
+      isSubmitting={isSubmitting}
+      error={error}
+      handleSubmit={handleSubmit}
+      handleChange={handleChange}
+    />
   );
 };
 
